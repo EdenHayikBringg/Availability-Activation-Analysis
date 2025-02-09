@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import plotly.express as px
 from scipy import stats
 
@@ -117,6 +116,22 @@ if uploaded_file is not None:
     st.write(f"Total Unique Run IDs: {df['run_id'].nunique()}")
     st.write(f"Avarage Tasks per Run ID: {df['count'].mean():.2f}")
 
+    st.subheader("Tasks per Run ID Distribution")
+    # select a month to show the distribution of tasks per run_id
+    selected_month = st.selectbox("Select a month to show the distribution of tasks per run_id", df['month_dt'].dt.strftime('%Y-%m').unique())
+    df_month = df[df['month_dt'].dt.strftime('%Y-%m') == selected_month]
+
+    # general distribution of tasks per run_id
+
+    fig_hist = px.histogram(
+        df_month,
+        x='count',
+        nbins=50,
+        labels={"count": "Tasks per Run ID"},
+        title=f"Tasks per Run ID Distribution for Selected Month (Average: {df_month['count'].mean():.2f})"
+    )
+    st.plotly_chart(fig_hist, use_container_width=True)
+
     # ---------------------------
     # Compute Monthly Average Tasks per Run ID
     # ---------------------------
@@ -192,6 +207,7 @@ if uploaded_file is not None:
             title="Same-Month Comparison Across Years"
         )
     st.plotly_chart(fig_trend, use_container_width=True)
+
 
     # ---------------------------
     # Statistical Test: Paired Welch’s T-Test
