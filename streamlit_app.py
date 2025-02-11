@@ -22,18 +22,23 @@ the **same month before the activation**, while **normalizing the data for busin
 show_sql_query = st.checkbox("Click to show the relevant sql query for this service", value=False)
 if show_sql_query:
     st.code("""
-    SELECT count(*), month, run_id, teams_ids
+    SELECT 
+        count(*) AS total_count, 
+        month, 
+        run_id, 
+        teams_ids, 
+        array_agg(id) AS task_ids
     FROM tasks 
-    WHERE merchant_id = ???
-    and tasks.delete_at is null
-    and tasks.task_type_id != 3
-    and month > ???? (in the form of yyyymm)
-    and cancelled_at is null
+    WHERE merchant_id = ??
+    AND tasks.delete_at IS NULL
+    AND tasks.task_type_id != 3
+    AND month > 202305
+    AND month < 202501
     AND CASE 
         WHEN cardinality(teams_ids) > 0 THEN teams_ids[1] 
         ELSE NULL 
-    END IN (team_id1, team_id2, ...)
-    group by run_id, month, teams_ids
+    END IN (??,??) # team names
+    GROUP BY run_id, month, teams_ids
     """)
 
 # ---------------------------
@@ -47,9 +52,9 @@ if uploaded_file is not None:
     # ---------------------------
     df = pd.read_csv(uploaded_file)
 
-    # Rename _col0 to "count" for clarity
+    # Rename _col0 to "total_count" for clarity
     if "_col0" in df.columns:
-        df.rename(columns={"_col0": "count"}, inplace=True)
+        df.rename(columns={"_col0": "total_count"}, inplace=True)
 
     # Convert 'month' to string and then to datetime format
     df['month'] = df['month'].astype(str)
@@ -64,6 +69,9 @@ if uploaded_file is not None:
 
     # Delete 2025 rows
     df = df[df['year'] != 2025]
+
+    # Delete runs with only 1 task
+    # df = df[df['total_count'] > 1]
 
     # ---------------------------
     # Threshold Date Selection via UI
@@ -96,6 +104,7 @@ if uploaded_file is not None:
     df = df.assign(teams_ids=df['teams_ids'].str.split(",")).explode('teams_ids')
     df['teams_ids'] = df['teams_ids'].astype(str)
 
+
     # ---------------------------
     # Team Selection
     # ---------------------------
@@ -114,7 +123,7 @@ if uploaded_file is not None:
     st.subheader("Data Distribution")
     st.write(f"Total Rows: {df.shape[0]}")
     st.write(f"Total Unique Run IDs: {df['run_id'].nunique()}")
-    st.write(f"Avarage Tasks per Run ID: {df['count'].mean():.2f}")
+    st.write(f"Avarage Tasks per Run ID: {df['total_count'].mean():.2f}")
 
     st.subheader("Tasks per Run ID Distribution")
     # select a month to show the distribution of tasks per run_id
@@ -125,10 +134,10 @@ if uploaded_file is not None:
 
     fig_hist = px.histogram(
         df_month,
-        x='count',
+        x='total_count',
         nbins=50,
-        labels={"count": "Tasks per Run ID"},
-        title=f"Tasks per Run ID Distribution for Selected Month (Average: {df_month['count'].mean():.2f})"
+        labels={"total_count": "Tasks per Run ID"},
+        title=f"Tasks per Run ID Distribution for Selected Month (Average: {df_month['total_count'].mean():.2f})"
     )
     st.plotly_chart(fig_hist, use_container_width=True)
 
@@ -136,7 +145,7 @@ if uploaded_file is not None:
     # Compute Monthly Average Tasks per Run ID
     # ---------------------------
     df_grouped = df.groupby(['month_dt', 'year', 'month_only'], as_index=False).agg(
-        total_tasks=('count', 'sum'),
+        total_tasks=('total_count', 'sum'),
         unique_runs=('run_id', 'nunique')
     )
 
